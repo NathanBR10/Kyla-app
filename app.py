@@ -334,9 +334,18 @@ def show_profile():
     user = get_user(st.session_state.user_email)
     st.subheader(f"👤 Mi perfil: {user['name']}")
 
-    # ... (tu código actual)
+    user = get_user(st.session_state.user_email)
+    st.subheader(f"👤 Mi perfil: {user['name']}")
+    st.markdown(f"**Email:** {user['email']}")
+    st.markdown(f"**Teléfono:** {user['phone']}")
+    st.markdown(f"**Tipo:** {'Arrendador' if user['is_owner'] else 'Arrendatario'}")
+    st.markdown(f"**Calificación:** ⭐ {user['rating_avg']} ({user['rating_count']} reseñas)")
+    if st.button("Cerrar sesión"):
+        st.session_state.logged_in = False
+        st.session_state.user_email = ""
+        st.rerun()
 
-    if user["is_owner"]:
+if user["is_owner"]:
         st.markdown("---")
         st.subheader("📬 Buzón de solicitudes de arrendamiento")
 
@@ -443,20 +452,8 @@ def show_rental_application():
                 st.rerun()
 
     if st.button("⬅️ Volver"):
-        st.session_state.current_page = "property_detail"
-        st.rerun()
-
-# Mi perfil
-def show_profile():
-    user = get_user(st.session_state.user_email)
-    st.subheader(f"👤 Mi perfil: {user['name']}")
-    st.markdown(f"**Email:** {user['email']}")
-    st.markdown(f"**Teléfono:** {user['phone']}")
-    st.markdown(f"**Tipo:** {'Arrendador' if user['is_owner'] else 'Arrendatario'}")
-    st.markdown(f"**Calificación:** ⭐ {user['rating_avg']} ({user['rating_count']} reseñas)")
-    if st.button("Cerrar sesión"):
-        st.session_state.logged_in = False
-        st.session_state.user_email = ""
+        st.session_state.current_page = "home"
+        # No elimines selected_property, para que siga mostrando el detalle
         st.rerun()
 
 
@@ -464,6 +461,16 @@ def show_profile():
 if not st.session_state.logged_in:
     show_auth()
 else:
+    # Estado de sesión
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+    if "user_email" not in st.session_state:
+        st.session_state.user_email = ""
+    if "current_page" not in st.session_state:
+        st.session_state.current_page = "home"
+    if "applications" not in st.session_state:
+        st.session_state.applications = []  # ← ¡FALTABA ESTO!
+
     user = get_user(st.session_state.user_email)
     st.sidebar.title("Kyla")
     st.sidebar.markdown(f"👤 {user['name']}")
