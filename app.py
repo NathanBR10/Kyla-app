@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import os
 from PIL import Image
+import difflib
+from unidecode import unidecode
 
 # Configuración
 st.set_page_config(page_title="Kyla", layout="wide")
@@ -9,6 +11,26 @@ st.markdown("<h1 style='text-align: center; color: #4A90E2;'>🏡 Kyla</h1>", un
 st.markdown("<p style='text-align: center; color: gray;'>Encuentra o publica tu próximo hogar</p>",
             unsafe_allow_html=True)
 
+def normalize_text(text):
+    """Convierte texto a minúsculas y elimina tildes"""
+    return unidecode(str(text).lower().strip())
+
+def is_match(query, text, threshold=0.4):
+    """
+    Devuelve True si el texto es similar a la búsqueda
+    threshold: 0.4 = flexible, 0.6 = estricto
+    """
+    if not query or not text:
+        return False
+    # Normalizar ambos textos
+    q = normalize_text(query)
+    t = normalize_text(text)
+    # Buscar si la consulta está dentro del texto (flexible)
+    if q in t:
+        return True
+    # O usar similitud de secuencia
+    score = difflib.SequenceMatcher(None, q, t).ratio()
+    return score >= threshold
 
 # Cargar datos
 @st.cache_data
@@ -100,39 +122,50 @@ def show_home():
 
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
-        search = st.text_input("Buscar por ubicación o nombre")
+        search = st.text_input("Buscar por ubicación, nombre o características")
     with col2:
         min_price = st.number_input("Precio mínimo", 0, 10000000, 0)
     with col3:
         max_price = st.number_input("Precio máximo", 0, 10000000, 1000000)
 
+    # Aplicar filtros
     filtered = properties_df.copy()
+
+    # 🔎 Búsqueda inteligente en título y ubicación
     if search:
         filtered = filtered[
-            filtered["title"].str.contains(search, case=False) |
-            filtered["location"].str.contains(search, case=False)
-            ]
+            filtered.apply(
+                lambda row: is_match(search, row["title"]) or is_match(search, row["location"]),
+                axis=1
+            )
+        ]
+
+    # 💰 Filtro de precio
     filtered = filtered[(filtered["price"] >= min_price) & (filtered["price"] <= max_price)]
 
-    for _, prop in filtered.iterrows():
-        owner = users_df[users_df["id"] == prop["owner_id"]].iloc[0]
-        with st.container():
-            cols = st.columns([1, 3, 1])
-            with cols[0]:
-                img_path = f"assets/images/{prop['images'].split(',')[0]}"
-                if os.path.exists(img_path):
-                    image = Image.open(img_path)
-                    st.image(image, width=120)
-            with cols[1]:
-                st.markdown(f"**{prop['title']}**")
-                st.markdown(f"📍 {prop['location']} | 💰 ${prop['price']:,} COP")
-                st.markdown(f"🛏️ {prop['beds']} | 🛁 {prop['baths']} | 📏 {prop['area']} m² | ⭐ {prop['rating']}")
-                st.markdown(f"🏠 Arrendador: {owner['name']} (⭐ {owner['rating_avg']})")
-            with cols[2]:
-                if st.button("Ver", key=f"view_{prop['id']}"):
-                    st.session_state.selected_property = prop["id"]
-                    st.rerun()
-            st.markdown("---")
+    # 📭 Mensaje si no hay resultados
+    if filtered.empty:
+        st.info("📭 No se encontraron propiedades con esos filtros. Intenta con otra búsqueda.")
+    else:
+        for _, prop in filtered.iterrows():
+            owner = users_df[users_df["id"] == prop["owner_id"]].iloc[0]
+            with st.container():
+                cols = st.columns([1, 3, 1])
+                with cols[0]:
+                    img_path = f"assets/images/{prop['images'].split(',')[0]}"
+                    if os.path.exists(img_path):
+                        image = Image.open(img_path)
+                        st.image(image, width=120)
+                with cols[1]:
+                    st.markdown(f"**{prop['title']}**")
+                    st.markdown(f"📍 {prop['location']} | 💰 ${prop['price']:,} COP")
+                    st.markdown(f"🛏️ {prop['beds']} | 🛁 {prop['baths']} | 📏 {prop['area']} m² | ⭐ {prop['rating']}")
+                    st.markdown(f"🏠 Arrendador: {owner['name']} (⭐ {owner['rating_avg']})")
+                with cols[2]:
+                    if st.button("Ver", key=f"view_{prop['id']}"):
+                        st.session_state.selected_property = prop["id"]
+                        st.rerun()
+                st.markdown("---")
 
 
 # Detalle de propiedad
