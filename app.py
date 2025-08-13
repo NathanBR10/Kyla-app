@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from PIL import Image
 import difflib
-from unidecode import unidecode
+
 
 # Configuración
 st.set_page_config(page_title="Kyla", layout="wide")
@@ -12,8 +12,14 @@ st.markdown("<p style='text-align: center; color: gray;'>Encuentra o publica tu 
             unsafe_allow_html=True)
 
 def normalize_text(text):
-    """Convierte texto a minúsculas y elimina tildes"""
-    return unidecode(str(text).lower().strip())
+    text = str(text).lower().strip()
+    replacements = {
+        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+        'ñ': 'n', 'ü': 'u'
+    }
+    for a, b in replacements.items():
+        text = text.replace(a, b)
+    return text
 
 def is_match(query, text, threshold=0.4):
     """
@@ -38,6 +44,12 @@ def load_data():
     try:
         properties = pd.read_csv("data/properties.csv")
         users = pd.read_csv("data/users.csv")
+
+        # 🔢 Asegurar que el precio sea numérico
+        properties["price"] = pd.to_numeric(properties["price"], errors="coerce")
+        # Eliminar filas con precio inválido
+        properties = properties.dropna(subset=["price"])
+        properties["price"] = properties["price"].astype(int)
 
         # 🔽 Aseguramos que las columnas de texto sean strings
         for col in ["title", "location", "description", "amenities"]:
@@ -118,6 +130,12 @@ def show_auth():
 
 # Pantalla principal
 def show_home():
+    # 🔍 DEBUG: Verifica que hay datos
+    st.write(f"📊 Total de propiedades cargadas: {len(properties_df)}")
+    if len(properties_df) == 0:
+        st.error("❌ No se cargaron propiedades. Revisa el archivo 'data/properties.csv'")
+        return
+
     st.markdown("### 🏠 Encuentra tu próximo hogar")
 
     col1, col2, col3 = st.columns([2, 1, 1])
