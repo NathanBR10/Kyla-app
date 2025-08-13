@@ -15,6 +15,10 @@ st.markdown("<p style='text-align: center; color: gray;'>Encuentra o publica tu 
 def load_data():
     properties = pd.read_csv("data/properties.csv")
     users = pd.read_csv("data/users.csv")
+
+    # Aseguramos que la contraseña sea string
+    users["password"] = users["password"].astype(str)
+
     return properties, users
 
 
@@ -41,6 +45,8 @@ def show_auth():
         email = st.text_input("Email", key="login_email")
         password = st.text_input("Contraseña", type="password", key="login_password")
         if st.button("Entrar", key="login_btn"):
+            email = email.strip()  # Elimina espacios al inicio y final
+            password = password.strip()
             user = get_user(email)
             if user is not None and user["password"] == password:
                 st.session_state.logged_in = True
