@@ -13,13 +13,23 @@ st.markdown("<p style='text-align: center; color: gray;'>Encuentra o publica tu 
 # Cargar datos
 @st.cache_data
 def load_data():
-    properties = pd.read_csv("data/properties.csv")
-    users = pd.read_csv("data/users.csv")
+    try:
+        properties = pd.read_csv("data/properties.csv")
+        users = pd.read_csv("data/users.csv")
 
-    # Aseguramos que la contraseña sea string
-    users["password"] = users["password"].astype(str)
+        # 🔽 Aseguramos que las columnas de texto sean strings
+        for col in ["title", "location", "description", "amenities"]:
+            if col in properties.columns:
+                properties[col] = properties[col].astype(str).fillna("")
 
-    return properties, users
+        # Aseguramos que el email sea string
+        users["email"] = users["email"].astype(str).fillna("")
+
+        return properties, users
+
+    except Exception as e:
+        st.error("❌ Error al cargar los datos. Verifica que 'data/properties.csv' y 'data/users.csv' existan y tengan el formato correcto.")
+        st.stop()
 
 
 properties_df, users_df = load_data()
