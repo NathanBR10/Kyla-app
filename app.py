@@ -45,12 +45,6 @@ def load_data():
         properties = pd.read_csv("data/properties.csv")
         users = pd.read_csv("data/users.csv")
 
-        # ✅ Verifica que hay datos
-        st.write("📊 Total de propiedades cargadas:", len(properties))
-        if len(properties) > 0:
-            st.write("✅ Primeras filas:")
-            st.dataframe(properties.head())
-
         # 🔢 Asegurar que el precio sea numérico
         properties["price"] = pd.to_numeric(properties["price"], errors="coerce")
         # Eliminar filas con precio inválido
@@ -237,6 +231,10 @@ def show_property_detail():
 
     if st.button("📩 Contactar arrendador"):
         st.success("Mensaje enviado. ¡El arrendador se pondrá en contacto contigo!")
+    if st.button("📩 Iniciar proceso de arrendamiento", type="primary"):
+        st.session_state.in_rental_process = True
+        st.session_state.property_id = prop["id"]
+        st.rerun()
     if st.button("⬅️ Volver al inicio"):
         del st.session_state.selected_property
         st.rerun()
@@ -285,6 +283,108 @@ def show_add_property():
             st.success("🎉 ¡Tu inmueble ha sido publicado en Kyla!")
             st.balloons()
 
+def show_profile():
+    user = get_user(st.session_state.user_email)
+    st.subheader(f"👤 Mi perfil: {user['name']}")
+
+    # ... (tu código actual)
+
+    if user["is_owner"]:
+        st.markdown("---")
+        st.subheader("📬 Buzón de solicitudes de arrendamiento")
+
+        # Filtrar solicitudes para propiedades de este owner
+        if "applications" in st.session_state:
+            owner_apps = []
+            for app in st.session_state.applications:
+                prop = properties_df[properties_df["title"] == app["property"]]
+                if not prop.empty and prop.iloc[0]["owner_id"] == user["id"]:
+                    owner_apps.append(app)
+
+            if owner_apps:
+                for i, app in enumerate(owner_apps):
+                    with st.expander(f"📄 {app['applicant']} - {app['property']}"):
+                        st.write(f"**Email:** {app['email']}")
+                        st.write(f"**Comentarios:** {app['comments']}")
+                        st.write(f"**Archivos adjuntos:** {', '.join(app['files'])}")
+                        st.write(f"**Fecha:** {app['timestamp'].strftime('%d/%m/%Y %H:%M')}")
+                        st.write(f"**Estado:** {app['status']}")
+
+                        # Botón de aprobación
+                        if st.button(f"Aprobar solicitud", key=f"approve_{i}"):
+                            app["status"] = "Aprobada"
+                            st.success(f"✅ Solicitud de {app['applicant']} aprobada")
+                            st.rerun()
+
+                        if st.button(f"Rechazar", key=f"reject_{i}"):
+                            app["status"] = "Rechazada"
+                            st.warning(f"🚫 Solicitud rechazada")
+                            st.rerun()
+            else:
+                st.info("📭 No tienes solicitudes pendientes.")
+        else:
+            st.info("Aún no hay solicitudes.")
+
+def show_rental_application():
+    prop_id = st.session_state.get("property_id")
+    if not prop_id:
+        st.error("No hay propiedad seleccionada")
+        return
+
+    prop = properties_df[properties_df["id"] == prop_id].iloc[0]
+    user = get_user(st.session_state.user_email)
+    owner = users_df[users_df["id"] == prop["owner_id"]].iloc[0]
+
+    st.markdown("<h2 style='color: #4A90E2;'>📝 Solicitud de Arrendamiento</h2>", unsafe_allow_html=True)
+    st.markdown(f"**Propiedad:** {prop['title']} en {prop['location']}")
+
+    st.markdown("### 📄 Documentos requeridos")
+    st.info("""
+    - Copia del documento de identidad  
+    - Comprobante de ingresos (últimos 3 recibos)  
+    - Referencias personales o laborales  
+    - Historial crediticio (opcional)  
+    """)
+
+    st.markdown("### 💬 Comentarios adicionales")
+    comments = st.text_area("Escribe un mensaje al arrendador", height=100)
+
+    st.markdown("### 📎 Adjuntar documentos")
+    uploaded_files = st.file_uploader(
+        "Sube los documentos requeridos",
+        accept_multiple_files=True,
+        type=["pdf", "jpg", "png", "docx"]
+    )
+
+    if st.button("📤 Enviar solicitud de arrendamiento", type="primary"):
+        if not uploaded_files:
+            st.warning("Por favor, adjunta al menos un documento.")
+        else:
+            # Guardar en Google Sheets (simulado por ahora)
+            try:
+                # Aquí iría save_to_google_sheets()
+                st.session_state.last_application = {
+                    "property": prop["title"],
+                    "applicant": user["name"],
+                    "email": user["email"],
+                    "comments": comments,
+                    "files": [f.name for f in uploaded_files],
+                    "status": "En revisión",
+                    "timestamp": pd.Timestamp.now()
+                }
+
+                # Guardar en sesión (temporal)
+                if "applications" not in st.session_state:
+                    st.session_state.applications = []
+                st.session_state.applications.append(st.session_state.last_application)
+
+                st.success("✅ ¡Solicitud enviada con éxito!")
+                st.markdown("### 📬 Estado del proceso")
+                st.info("Tu solicitud ha sido enviada al arrendador. Pronto recibirás una respuesta.")
+                st.balloons()
+
+            except Exception as e:
+                st.error("Hubo un error al enviar la solicitud.")
 
 # Mi perfil
 def show_profile():
