@@ -194,7 +194,22 @@ def show_home():
 # Detalle de propiedad
 def show_property_detail():
     prop_id = st.session_state.get("selected_property")
-    prop = properties_df[properties_df["id"] == prop_id].iloc[0]
+
+    if not prop_id:
+        st.error("No se seleccionó ninguna propiedad.")
+        if st.button("Volver al inicio"):
+            st.rerun()
+        return
+
+    if prop_filtered.empty:
+        st.error("❌ No se encontró la propiedad solicitada.")
+        if st.button("Volver al inicio"):
+            if "selected_property" in st.session_state:
+                del st.session_state.selected_property
+            st.rerun()
+        return
+
+    prop = prop_filtered.iloc[0]  # Ahora seguro
     owner = users_df[users_df["id"] == prop["owner_id"]].iloc[0]
 
     # Lista para almacenar imágenes válidas
@@ -326,6 +341,12 @@ def show_profile():
             st.info("Aún no hay solicitudes.")
 
 def show_rental_application():
+    try:
+        prop_id = int(prop_id)
+    except (TypeError, ValueError):
+        st.error("ID de propiedad inválido.")
+        return
+
     prop_id = st.session_state.get("property_id")
     if not prop_id:
         st.error("No hay propiedad seleccionada")
