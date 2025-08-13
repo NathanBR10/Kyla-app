@@ -3,14 +3,20 @@ import pandas as pd
 import os
 from PIL import Image
 import difflib
+import datetime
 
-
-# Configuración
+# ======================
+# CONFIGURACIÓN INICIAL
+# ======================
 st.set_page_config(page_title="Kyla", layout="wide")
 st.markdown("<h1 style='text-align: center; color: #4A90E2;'>🏡 Kyla</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: gray;'>Encuentra o publica tu próximo hogar</p>",
             unsafe_allow_html=True)
 
+
+# ======================
+# FUNCIONES DE UTILIDAD
+# ======================
 def normalize_text(text):
     text = str(text).lower().strip()
     replacements = {
@@ -21,31 +27,28 @@ def normalize_text(text):
         text = text.replace(a, b)
     return text
 
+
 def is_match(query, text, threshold=0.4):
-    """
-    Devuelve True si el texto es similar a la búsqueda
-    threshold: 0.4 = flexible, 0.6 = estricto
-    """
     if not query or not text:
         return False
-    # Normalizar ambos textos
     q = normalize_text(query)
     t = normalize_text(text)
-    # Buscar si la consulta está dentro del texto (flexible)
     if q in t:
         return True
-    # O usar similitud de secuencia
     score = difflib.SequenceMatcher(None, q, t).ratio()
     return score >= threshold
 
-# Cargar datos
+
+# ======================
+# CARGA DE DATOS
+# ======================
 @st.cache_data
 def load_data():
     try:
         properties = pd.read_csv("data/properties.csv", encoding="utf-8")
         users = pd.read_csv("data/users.csv", encoding="utf-8")
 
-        # ✅ Validar que no estén vacíos
+        # Validar que no estén vacíos
         if properties.empty:
             st.error("❌ El archivo 'properties.csv' está vacío.")
             st.stop()
@@ -54,60 +57,63 @@ def load_data():
             st.error("❌ El archivo 'users.csv' está vacío.")
             st.stop()
 
-        # 🔢 Asegurar que el precio sea numérico
+        # Asegurar que el precio sea numérico
         properties["price"] = pd.to_numeric(properties["price"], errors="coerce")
-        # Eliminar filas con precio inválido
         properties = properties.dropna(subset=["price"])
         properties["price"] = properties["price"].astype(int)
 
-        # 🔽 Aseguramos que las columnas de texto sean strings
+        # Asegurar que las columnas de texto sean strings
         for col in ["title", "location", "description", "amenities"]:
             if col in properties.columns:
                 properties[col] = properties[col].astype(str).fillna("")
 
-        # Aseguramos que el email sea string
+        # Asegurar que el email y contraseña sean string
         users["email"] = users["email"].astype(str).fillna("")
-
-        # Aseguramos que la contraseña sea string
         users["password"] = users["password"].astype(str)
 
         return properties, users
 
     except FileNotFoundError as e:
-        st.error(
-            "❌ No se encontraron los archivos de datos. Asegúrate de que `data/properties.csv` y `data/users.csv` están en GitHub.")
-        st.code("Estructura esperada:\nkyla-app/\n├── data/\n│   ├── properties.csv\n│   └── users.csv")
+        st.error("❌ No se encontraron los archivos de datos. Verifica que están en GitHub.")
         st.stop()
-
-    except pd.errors.EmptyDataError:
-        st.error("❌ Uno de los archivos CSV está vacío.")
-        st.stop()
-
     except Exception as e:
-        st.error("❌ Error al cargar los datos. Verifica que 'data/properties.csv' y 'data/users.csv' existan y tengan el formato correcto.")
+        st.error("❌ Error al cargar los datos. Verifica el formato de los CSV.")
         st.stop()
 
 
 properties_df, users_df = load_data()
 
-# === Estado de sesión (DEBE IR AL INICIO, después de cargar datos) ===
+# ======================
+# ESTADO DE SESIÓN (CRÍTICO - DEBE IR AL INICIO)
+# ======================
+# Inicializar TODAS las variables de estado aquí
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "user_email" not in st.session_state:
     st.session_state.user_email = ""
 if "current_page" not in st.session_state:
-    st.session_state.current_page = "home"
+    st.session_state.current_page = "home"  # Página inicial
 if "selected_property" not in st.session_state:
     st.session_state.selected_property = None
 if "applications" not in st.session_state:
-    st.session_state.applications = []  # ← Buzón de solicitudes
+    st.session_state.applications = []  # Buzón de solicitudes
+if "debug_mode" not in st.session_state:
+    st.session_state.debug_mode = False  # Para diagnóstico
 
+
+# ======================
+# FUNCIONES AUXILIARES
+# ======================
 def get_user(email):
+    if not email:
+        return None
     user = users_df[users_df["email"] == email]
     return user.iloc[0] if not user.empty else None
 
 
-# Página de Login / Registro
+# ======================
+# PÁGINAS DE LA APP
+# ======================
 def show_auth():
     st.subheader("🔐 Bienvenido a Kyla")
     tab1, tab2 = st.tabs(["Iniciar sesión", "Crear cuenta"])
@@ -116,14 +122,15 @@ def show_auth():
         email = st.text_input("Email", key="login_email")
         password = st.text_input("Contraseña", type="password", key="login_password")
         if st.button("Entrar", key="login_btn"):
-            email = email.strip()  # Elimina espacios al inicio y final
+            email = email.strip()
             password = password.strip()
             user = get_user(email)
             if user is not None and user["password"] == password:
                 st.session_state.logged_in = True
                 st.session_state.user_email = email
+                st.session_state.current_page = "home"
                 st.success(f"¡Hola de nuevo, {user['name']}!")
-                st.rerun()
+                st.rerun()  # ¡CRÍTICO! Reinicia la app para aplicar cambios
             else:
                 st.error("Email o contraseña incorrectos")
 
@@ -152,14 +159,7 @@ def show_auth():
                 st.balloons()
 
 
-# Pantalla principal
 def show_home():
-    # 🔍 DEBUG: Verifica que hay datos
-    st.write(f"📊 Total de propiedades cargadas: {len(properties_df)}")
-    if len(properties_df) == 0:
-        st.error("❌ No se cargaron propiedades. Revisa el archivo 'data/properties.csv'")
-        return
-
     st.markdown("### 🏠 Encuentra tu próximo hogar")
 
     col1, col2, col3 = st.columns([2, 1, 1])
@@ -168,18 +168,13 @@ def show_home():
     with col2:
         min_price = st.number_input("Precio mínimo", 0, 10000000, 0)
     with col3:
-        max_price = st.number_input("Precio máximo", 0, 10000000, 2000000)  # Sube el valor por defecto
+        max_price = st.number_input("Precio máximo", 0, 10000000, 2000000)
 
     # Aplicar filtros
     filtered = properties_df.copy()
 
-    # 🔎 Búsqueda inteligente en título y ubicación
+    # Búsqueda inteligente
     if search:
-        query = search.lower().strip()
-        # Normaliza tildes manualmente
-        replacements = {'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ñ': 'n'}
-        for a, b in replacements.items():
-            query = query.replace(a, b)
         filtered = filtered[
             filtered.apply(
                 lambda row: is_match(search, row["title"]) or is_match(search, row["location"]),
@@ -187,12 +182,12 @@ def show_home():
             )
         ]
 
-    # 💰 Filtro de precio
+    # Filtro de precio
     filtered = filtered[(filtered["price"] >= min_price) & (filtered["price"] <= max_price)]
 
-    # 📭 Mensaje si no hay resultados
+    # Mostrar resultados
     if filtered.empty:
-        st.info("📭 No se encontraron propiedades con esos filtros. Intenta con otra búsqueda.")
+        st.info("📭 No se encontraron propiedades con esos filtros.")
     else:
         for _, prop in filtered.iterrows():
             owner = users_df[users_df["id"] == prop["owner_id"]].iloc[0]
@@ -211,62 +206,46 @@ def show_home():
                 with cols[2]:
                     if st.button("Ver", key=f"view_{prop['id']}"):
                         st.session_state.selected_property = prop["id"]
-                        st.rerun()
+                        st.session_state.current_page = "property_detail"
+                        st.rerun()  # ¡CRÍTICO!
                 st.markdown("---")
 
 
-# Detalle de propiedad
 def show_property_detail():
-    prop_id = st.session_state.get("selected_property")
-
+    prop_id = st.session_state.selected_property
     if not prop_id:
         st.error("No se seleccionó ninguna propiedad.")
         if st.button("Volver al inicio"):
+            st.session_state.current_page = "home"
             st.rerun()
         return
 
-    # Asegurarnos de que prop_id sea entero
-    try:
-        prop_id = int(prop_id)
-    except (ValueError, TypeError):
-        st.error("🆔 ID de propiedad inválido.")
+    # Buscar propiedad
+    prop = properties_df[properties_df["id"] == prop_id]
+    if prop.empty:
+        st.error("❌ Propiedad no encontrada.")
         if st.button("Volver al inicio"):
-            st.session_state.pop("selected_property", None)
+            st.session_state.current_page = "home"
+            st.session_state.selected_property = None
             st.rerun()
         return
 
-    # Buscar la propiedad
-    prop_filtered = properties_df[properties_df["id"] == prop_id]
-    if prop_filtered.empty:
-        st.error("❌ No se encontró la propiedad solicitada.")
-        if st.button("Volver al inicio"):
-            if "selected_property" in st.session_state:
-                del st.session_state.selected_property
-            st.rerun()
-        return
-
-    prop = prop_filtered.iloc[0]  # Ahora seguro
+    prop = prop.iloc[0]
     owner = users_df[users_df["id"] == prop["owner_id"]].iloc[0]
 
-    # Lista para almacenar imágenes válidas
+    # Mostrar imágenes
     valid_images = []
-
     for img in prop["images"].split(","):
-        img = img.strip()
-        img_path = f"assets/images/{img}"
-
-        # Verifica si el archivo existe
+        img_path = f"assets/images/{img.strip()}"
         if os.path.exists(img_path):
             valid_images.append(img_path)
-        else:
-            st.warning(f"⚠️ Imagen no encontrada: {img_path}")
 
-    # Muestra las imágenes o una por defecto
     if valid_images:
-        st.image(valid_images, width=300, caption=[f"Imagen" for _ in valid_images])
+        st.image(valid_images, width=300)
     else:
         st.image("https://via.placeholder.com/300x200?text=Sin+imagen", width=300)
-        st.write("No hay imágenes disponibles para esta propiedad.")
+
+    # Detalles de la propiedad
     st.title(prop["title"])
     st.subheader(f"📍 {prop['location']}")
     st.markdown(f"**Precio:** ${prop['price']:,} COP/mes")
@@ -280,114 +259,25 @@ def show_property_detail():
     st.markdown(f"**Teléfono:** {owner['phone']}")
     st.markdown(f"**Reputación:** ⭐ {owner['rating_avg']} ({owner['rating_count']} reseñas)")
 
-    if st.button("📩 Contactar arrendador"):
-        st.success("Mensaje enviado. ¡El arrendador se pondrá en contacto contigo!")
-    if st.button("📩 Iniciar proceso de arrendamiento", type="primary"):
-        st.session_state.current_page = "rental_application"
-        st.session_state.in_rental_process = True
-        st.session_state.property_id = prop["id"]
-        st.rerun()
-    if st.button("⬅️ Volver al inicio"):
-        del st.session_state.selected_property
-        st.rerun()
+    # Botones de acción
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📩 Contactar arrendador", use_container_width=True):
+            st.success("Mensaje enviado. ¡El arrendador se pondrá en contacto contigo!")
 
+    with col2:
+        if st.button("📩 Iniciar proceso de arrendamiento", type="primary", use_container_width=True):
+            st.session_state.current_page = "rental_application"
+            st.rerun()  # ¡ESTO ES LO QUE FALTABA!
 
-# Publicar inmueble
-def show_add_property():
-    st.subheader("➕ Publica tu inmueble en Kyla")
-    title = st.text_input("Título del inmueble")
-    location = st.text_input("Ubicación")
-    price = st.number_input("Precio mensual (COP)", min_value=100000, value=500000)
-    beds = st.number_input("Habitaciones", 1, 5, 2)
-    baths = st.number_input("Baños", 1, 4, 1)
-    area = st.number_input("Área (m²)", 20, 300, 60)
-    description = st.text_area("Descripción")
-    amenities = st.multiselect(
-        "Servicios",
-        ["wifi", "parking", "pool", "gym", "elevator", "pet_friendly", "furnished"]
-    )
-    uploaded_files = st.file_uploader("Sube fotos", accept_multiple_files=True, type=["jpg", "png"])
-
-    if st.button("Publicar ahora"):
-        if not uploaded_files:
-            st.error("Por favor, sube al menos una foto.")
-        else:
-            image_names = [f"img_{len(properties_df) + i + 1}.jpg" for i in range(len(uploaded_files))]
-            for file, name in zip(uploaded_files, image_names):
-                with open(f"assets/images/{name}", "wb") as f:
-                    f.write(file.getvalue())
-
-            new_prop = pd.DataFrame([{
-                "id": len(properties_df) + 1,
-                "title": title,
-                "location": location,
-                "price": price,
-                "beds": beds,
-                "baths": baths,
-                "area": area,
-                "description": description,
-                "owner_id": get_user(st.session_state.user_email)["id"],
-                "images": ",".join(image_names),
-                "rating": 0,
-                "amenities": ",".join(amenities)
-            }])
-            new_prop.to_csv("data/properties.csv", mode="a", header=False, index=False)
-            st.success("🎉 ¡Tu inmueble ha sido publicado en Kyla!")
-            st.balloons()
-
-def show_profile():
-    user = get_user(st.session_state.user_email)
-    st.subheader(f"👤 Mi perfil: {user['name']}")
-
-    user = get_user(st.session_state.user_email)
-    st.subheader(f"👤 Mi perfil: {user['name']}")
-    st.markdown(f"**Email:** {user['email']}")
-    st.markdown(f"**Teléfono:** {user['phone']}")
-    st.markdown(f"**Tipo:** {'Arrendador' if user['is_owner'] else 'Arrendatario'}")
-    st.markdown(f"**Calificación:** ⭐ {user['rating_avg']} ({user['rating_count']} reseñas)")
-    if st.button("Cerrar sesión"):
-        st.session_state.logged_in = False
-        st.session_state.user_email = ""
+    if st.button("⬅️ Volver al inicio", use_container_width=True):
+        st.session_state.current_page = "home"
+        st.session_state.selected_property = None
         st.rerun()
 
-    if user["is_owner"]:
-        st.markdown("---")
-        st.subheader("📬 Buzón de solicitudes de arrendamiento")
-
-        # Filtrar solicitudes para propiedades de este owner
-        if "applications" in st.session_state:
-            owner_apps = []
-            for app in st.session_state.applications:
-                prop = properties_df[properties_df["title"] == app["property"]]
-                if not prop.empty and prop.iloc[0]["owner_id"] == user["id"]:
-                    owner_apps.append(app)
-
-            if owner_apps:
-                for i, app in enumerate(owner_apps):
-                    with st.expander(f"📄 {app['applicant']} - {app['property']}"):
-                        st.write(f"**Email:** {app['email']}")
-                        st.write(f"**Comentarios:** {app['comments']}")
-                        st.write(f"**Archivos adjuntos:** {', '.join(app['files'])}")
-                        st.write(f"**Fecha:** {app['timestamp'].strftime('%d/%m/%Y %H:%M')}")
-                        st.write(f"**Estado:** {app['status']}")
-
-                        # Botón de aprobación
-                        if st.button(f"Aprobar solicitud", key=f"approve_{i}"):
-                            app["status"] = "Aprobada"
-                            st.success(f"✅ Solicitud de {app['applicant']} aprobada")
-                            st.rerun()
-
-                        if st.button(f"Rechazar", key=f"reject_{i}"):
-                            app["status"] = "Rechazada"
-                            st.warning(f"🚫 Solicitud rechazada")
-                            st.rerun()
-            else:
-                st.info("📭 No tienes solicitudes pendientes.")
-        else:
-            st.info("Aún no hay solicitudes.")
 
 def show_rental_application():
-    prop_id = st.session_state.get("property_id")
+    prop_id = st.session_state.selected_property
     if not prop_id:
         st.error("No hay propiedad seleccionada.")
         if st.button("Volver al inicio"):
@@ -403,11 +293,15 @@ def show_rental_application():
     prop = prop.iloc[0]
 
     user = get_user(st.session_state.user_email)
-    owner = users_df[users_df["id"] == prop["owner_id"]].iloc[0]
+    if not user:
+        st.error("Usuario no autenticado.")
+        return
 
+    # Encabezado
     st.markdown("<h2 style='color: #4A90E2;'>📝 Solicitud de Arrendamiento</h2>", unsafe_allow_html=True)
     st.markdown(f"**Vivienda:** {prop['title']} en {prop['location']}")
 
+    # Documentos requeridos
     st.markdown("### 📄 Documentos requeridos")
     st.info("""
     - Copia del documento de identidad  
@@ -416,9 +310,11 @@ def show_rental_application():
     - Historial crediticio (opcional)  
     """)
 
+    # Comentarios
     st.markdown("### 💬 Comentarios al arrendador")
     comments = st.text_area("Escribe un mensaje", height=100)
 
+    # Subir documentos
     st.markdown("### 📎 Adjuntar documentos")
     uploaded_files = st.file_uploader(
         "Sube tus documentos (PDF, JPG, PNG)",
@@ -426,11 +322,12 @@ def show_rental_application():
         type=["pdf", "jpg", "png", "docx"]
     )
 
-    if st.button("📤 Enviar solicitud", type="primary"):
+    # Botón de enviar
+    if st.button("📤 Enviar solicitud", type="primary", use_container_width=True):
         if not uploaded_files:
             st.warning("Por favor, adjunta al menos un documento.")
         else:
-            # Guardar en sesión (simulado)
+            # Crear nueva solicitud
             new_app = {
                 "property_id": prop["id"],
                 "property_title": prop["title"],
@@ -439,57 +336,125 @@ def show_rental_application():
                 "comments": comments,
                 "files": [f.name for f in uploaded_files],
                 "status": "En revisión",
-                "timestamp": pd.Timestamp.now()
+                "timestamp": datetime.datetime.now()
             }
 
-            # Guardar en lista global de solicitudes
-            if "rental_applications" not in st.session_state:
-                st.session_state.rental_applications = []
-            st.session_state.rental_applications.append(new_app)
+            # Guardar en sesión
+            st.session_state.applications.append(new_app)
 
+            # Confirmación
             st.success("✅ ¡Solicitud enviada con éxito!")
             st.info("El arrendador la revisará pronto. Puedes ver el estado en tu perfil.")
             st.balloons()
 
-            # Opcional: volver al inicio después de 3 segundos
-            if st.button("Volver al inicio"):
+            # Volver al inicio después de 2 segundos
+            if st.button("Volver al inicio", use_container_width=True):
                 st.session_state.current_page = "home"
                 st.rerun()
 
-    if st.button("⬅️ Volver"):
-        st.session_state.current_page = "home"
-        # No elimines selected_property, para que siga mostrando el detalle
+    # Botón de volver
+    if st.button("⬅️ Volver", use_container_width=True):
+        st.session_state.current_page = "property_detail"
         st.rerun()
 
 
-# === Navegación principal ===
-if not st.session_state.logged_in:
-    show_auth()
-else:
+def show_profile():
     user = get_user(st.session_state.user_email)
-    if user is None:
-        st.error("❌ Sesión inválida. Inicia sesión nuevamente.")
+    if not user:
+        st.error("❌ Sesión inválida. Por favor, inicia sesión nuevamente.")
         st.session_state.logged_in = False
+        if st.button("Volver al inicio"):
+            st.rerun()
+        return
+
+    st.subheader(f"👤 Mi perfil: {user['name']}")
+    st.markdown(f"**Email:** {user['email']}")
+    st.markdown(f"**Teléfono:** {user['phone']}")
+    st.markdown(f"**Tipo:** {'Arrendador' if user['is_owner'] else 'Arrendatario'}")
+    st.markdown(f"**Calificación:** ⭐ {user['rating_avg']} ({user['rating_count']} reseñas)")
+
+    if st.button("Cerrar sesión", use_container_width=True):
+        st.session_state.logged_in = False
+        st.session_state.user_email = ""
+        st.session_state.current_page = "home"
         st.rerun()
 
-    st.sidebar.title("Kyla")
-    st.sidebar.markdown(f"👤 {user['name']}")
+    # Buzón de solicitudes (solo para arrendadores)
+    if user["is_owner"]:
+        st.markdown("---")
+        st.subheader("📬 Buzón de solicitudes de arrendamiento")
 
-    page = st.sidebar.radio("Ir a", ["Inicio", "Mi perfil"])
+        owner_apps = [
+            app for app in st.session_state.applications
+            if properties_df[properties_df["id"] == app["property_id"]].iloc[0]["owner_id"] == user["id"]
+        ]
 
-    if page == "Inicio":
-        st.session_state.current_page = "home"
-    elif page == "Mi perfil":
-        st.session_state.current_page = "profile"
+        if not owner_apps:
+            st.info("📭 No tienes solicitudes pendientes.")
+        else:
+            for i, app in enumerate(owner_apps):
+                with st.expander(f"📄 {app['applicant_name']} - {app['property_title']}"):
+                    st.write(f"**Email:** {app['applicant_email']}")
+                    st.write(f"**Comentarios:** {app['comments']}")
+                    st.write(f"**Archivos adjuntos:** {', '.join(app['files'])}")
+                    st.write(f"**Fecha:** {app['timestamp'].strftime('%d/%m/%Y %H:%M')}")
+                    st.write(f"**Estado:** {app['status']}")
 
-    # === Renderizado de páginas ===
-    if st.session_state.current_page == "home":
-        show_home()
-        if "selected_property" in st.session_state:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if st.button("Aprobar", key=f"approve_{i}", use_container_width=True):
+                            app["status"] = "Aprobada"
+                            st.success("✅ Solicitud aprobada")
+                            st.rerun()
+
+                    with col2:
+                        if st.button("Rechazar", key=f"reject_{i}", use_container_width=True):
+                            app["status"] = "Rechazada"
+                            st.warning("🚫 Solicitud rechazada")
+                            st.rerun()
+
+
+# ======================
+# FLUJO PRINCIPAL (CRÍTICO)
+# ======================
+def main():
+    # Mostrar estado para diagnóstico (opcional)
+    if st.session_state.debug_mode:
+        with st.expander("🔧 Estado de sesión (debug)"):
+            st.write("current_page:", st.session_state.current_page)
+            st.write("logged_in:", st.session_state.logged_in)
+            st.write("selected_property:", st.session_state.selected_property)
+            st.write("applications:", len(st.session_state.applications), "solicitudes")
+
+    # Flujo principal
+    if not st.session_state.logged_in:
+        show_auth()
+    else:
+        # Barra lateral
+        with st.sidebar:
+            st.title("Kyla")
+            user = get_user(st.session_state.user_email)
+            if user:
+                st.markdown(f"👤 {user['name']}")
+
+            # Navegación
+            page = st.radio("Ir a", ["Inicio", "Mi perfil"])
+
+            if page == "Inicio":
+                st.session_state.current_page = "home"
+            elif page == "Mi perfil":
+                st.session_state.current_page = "profile"
+
+        # Renderizar página actual
+        if st.session_state.current_page == "home":
+            show_home()
+        elif st.session_state.current_page == "property_detail":
             show_property_detail()
+        elif st.session_state.current_page == "rental_application":
+            show_rental_application()
+        elif st.session_state.current_page == "profile":
+            show_profile()
 
-    elif st.session_state.current_page == "rental_application":
-        show_rental_application()
 
-    elif st.session_state.current_page == "profile":
-        show_profile()
+if __name__ == "__main__":
+    main()
