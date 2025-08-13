@@ -25,6 +25,9 @@ def load_data():
         # Aseguramos que el email sea string
         users["email"] = users["email"].astype(str).fillna("")
 
+        # Aseguramos que la contraseña sea string
+        users["password"] = users["password"].astype(str)
+
         return properties, users
 
     except Exception as e:
