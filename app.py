@@ -10,9 +10,7 @@ import datetime
 # ======================
 st.set_page_config(page_title="Kyla", layout="wide")
 st.markdown("<h1 style='text-align: center; color: #4A90E2;'>🏡 Kyla</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: gray;'>Encuentra o publica tu próximo hogar</p>",
-            unsafe_allow_html=True)
-
+st.markdown("<p style='text-align: center; color: gray;'>Encuentra o publica tu próximo hogar</p>", unsafe_allow_html=True)
 
 # ======================
 # FUNCIONES DE UTILIDAD
@@ -27,7 +25,6 @@ def normalize_text(text):
         text = text.replace(a, b)
     return text
 
-
 def is_match(query, text, threshold=0.4):
     if not query or not text:
         return False
@@ -37,7 +34,6 @@ def is_match(query, text, threshold=0.4):
         return True
     score = difflib.SequenceMatcher(None, q, t).ratio()
     return score >= threshold
-
 
 # ======================
 # CARGA DE DATOS
@@ -80,25 +76,23 @@ def load_data():
         st.error("❌ Error al cargar los datos. Verifica el formato de los CSV.")
         st.stop()
 
-
-properties_df, users_df = load_data()
+# Cargar datos y guardar en session_state
+if "properties_df" not in st.session_state or "users_df" not in st.session_state:
+    st.session_state.properties_df, st.session_state.users_df = load_data()
 
 # ======================
-# ESTADO DE SESIÓN (CRÍTICO - DEBE IR AL INICIO)
+# ESTADO DE SESIÓN
 # ======================
-# Inicializar TODAS las variables de estado aquí
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "user_email" not in st.session_state:
     st.session_state.user_email = ""
 if "current_page" not in st.session_state:
-    st.session_state.current_page = "home"  # Página inicial
+    st.session_state.current_page = "home"
 if "selected_property" not in st.session_state:
     st.session_state.selected_property = None
 if "applications" not in st.session_state:
-    st.session_state.applications = []  # Buzón de solicitudes
-if "debug_mode" not in st.session_state:
-    st.session_state.debug_mode = False  # Para diagnóstico
+    st.session_state.applications = []
 
 
 # ======================
@@ -153,6 +147,10 @@ def show_auth():
         if st.button("Registrarse"):
             email = email.strip().lower()  # Normalizar a minúsculas
 
+            # Acceder a los DataFrames desde session_state
+            properties_df = st.session_state.properties_df
+            users_df = st.session_state.users_df
+
             if get_user(email):
                 st.error("Este email ya está registrado.")
             else:
@@ -170,10 +168,9 @@ def show_auth():
                 # Guardar en CSV
                 new_user.to_csv("data/users.csv", mode="a", header=False, index=False)
 
-                # Recargar los datos para incluir el nuevo usuario
+                # Recargar los datos
                 st.cache_data.clear()
-                global properties_df, users_df
-                properties_df, users_df = load_data()
+                st.session_state.properties_df, st.session_state.users_df = load_data()
 
                 st.success("✅ ¡Cuenta creada! Ya puedes iniciar sesión.")
                 st.balloons()
