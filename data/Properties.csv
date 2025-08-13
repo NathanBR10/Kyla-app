@@ -1,0 +1,4 @@
+﻿id,title,location,price,beds,baths,area,description,owner_id,images,rating,amenities
+"1,Casa con jardín,Medellín,900000,3,2,110,""Amplia casa con jardín y zona de lavandería"",1,""home1.jpg"",4.8,""wifi,parking,pet_friendly"""
+"2,Apartamento céntrico,Bogotá,650000,2,1,70,""Cerca del metro y centros comerciales"",2,""apt1.jpg"",4.7,""wifi,elevator"""
+"3,Estudio moderno,Cali,400000,1,1,45,""Ideal para estudiantes o parejas jóvenes"",1,""home2.jpg"",4.5,""wifi"""

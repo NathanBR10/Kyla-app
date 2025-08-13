@@ -1,0 +1,4 @@
+﻿id,name,email,password,phone,rating_count,rating_avg,is_owner
+1,Ana López,ana@email.com,123456,3001234567,15,4.8,True
+2,Luis Mendoza,luis@email.com,123456,3009876543,7,4.6,True
+3,Carla Ruiz,carla@email.com,123456,3001122334,0,0,False
