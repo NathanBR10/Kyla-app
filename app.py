@@ -345,7 +345,7 @@ def show_profile():
         st.session_state.user_email = ""
         st.rerun()
 
-if user["is_owner"]:
+    if user["is_owner"]:
         st.markdown("---")
         st.subheader("📬 Buzón de solicitudes de arrendamiento")
 
