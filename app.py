@@ -80,6 +80,11 @@ def load_data():
 if "properties_df" not in st.session_state or "users_df" not in st.session_state:
     st.session_state.properties_df, st.session_state.users_df = load_data()
 
+# Verificar que los DataFrames existan
+if "properties_df" not in st.session_state or "users_df" not in st.session_state:
+    st.error("❌ Error crítico: No se pudieron cargar los datos.")
+    st.stop()
+
 # ======================
 # ESTADO DE SESIÓN
 # ======================
@@ -102,10 +107,14 @@ def get_user(email):
     if not email or email.strip() == "":
         return None
 
-    # Normalizar email: minúsculas y sin espacios
+    # Obtener users_df desde session_state
+    if "users_df" not in st.session_state:
+        return None
+
+    users_df = st.session_state.users_df
     normalized_email = email.strip().lower()
 
-    # Buscar en el DataFrame (también en minúsculas)
+    # Buscar en el DataFrame
     user = users_df[users_df["email"].str.lower() == normalized_email]
 
     if not user.empty:
@@ -147,8 +156,11 @@ def show_auth():
         if st.button("Registrarse"):
             email = email.strip().lower()  # Normalizar a minúsculas
 
-            # Acceder a los DataFrames desde session_state
-            properties_df = st.session_state.properties_df
+            # Verificar que los DataFrames existan
+            if "users_df" not in st.session_state:
+                st.error("❌ Error de carga de datos. Recarga la página.")
+                return
+
             users_df = st.session_state.users_df
 
             if get_user(email):
@@ -177,6 +189,14 @@ def show_auth():
 
 
 def show_home():
+    # Verificar que los DataFrames existan en session_state
+    if "properties_df" not in st.session_state or "users_df" not in st.session_state:
+        st.error("❌ Error de carga de datos. Recarga la página.")
+        return
+
+    properties_df = st.session_state.properties_df
+    users_df = st.session_state.users_df
+
     st.markdown("### 🏠 Encuentra tu próximo hogar")
 
     col1, col2, col3 = st.columns([2, 1, 1])
@@ -436,13 +456,24 @@ def show_profile():
 # FLUJO PRINCIPAL (CRÍTICO)
 # ======================
 def main():
-    # Mostrar estado para diagnóstico (opcional)
-    if st.session_state.debug_mode:
-        with st.expander("🔧 Estado de sesión (debug)"):
-            st.write("current_page:", st.session_state.current_page)
-            st.write("logged_in:", st.session_state.logged_in)
-            st.write("selected_property:", st.session_state.selected_property)
-            st.write("applications:", len(st.session_state.applications), "solicitudes")
+    # Modo debug
+    if st.checkbox("Mostrar estado de sesión", key="debug_toggle"):
+        st.write("### Estado de sesión")
+        st.write("logged_in:", st.session_state.logged_in)
+        st.write("user_email:", st.session_state.user_email)
+        st.write("current_page:", st.session_state.current_page)
+        st.write("DataFrames cargados:",
+                 "properties_df" in st.session_state,
+                 "users_df" in st.session_state)
+
+    # Verificar que los DataFrames estén cargados
+    if "properties_df" not in st.session_state or "users_df" not in st.session_state:
+        st.error("❌ Error crítico: No se cargaron los datos. Recarga la página.")
+        if st.button("Recargar datos"):
+            st.cache_data.clear()
+            st.session_state.properties_df, st.session_state.users_df = load_data()
+            st.rerun()
+        return
 
     # Flujo principal
     if not st.session_state.logged_in:
@@ -457,6 +488,7 @@ def main():
             st.error("❌ Sesión inválida. Por favor, inicia sesión nuevamente.")
             st.rerun()
             return
+
         # Barra lateral
         with st.sidebar:
             st.title("Kyla")
@@ -479,7 +511,6 @@ def main():
             show_rental_application()
         elif st.session_state.current_page == "profile":
             show_profile()
-
 
 if __name__ == "__main__":
     main()
