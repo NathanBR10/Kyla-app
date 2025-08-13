@@ -203,7 +203,25 @@ def show_property_detail():
     prop = properties_df[properties_df["id"] == prop_id].iloc[0]
     owner = users_df[users_df["id"] == prop["owner_id"]].iloc[0]
 
-    st.image([f"assets/images/{img}" for img in prop["images"].split(",")], width=300)
+    # Lista para almacenar imágenes válidas
+    valid_images = []
+
+    for img in prop["images"].split(","):
+        img = img.strip()
+        img_path = f"assets/images/{img}"
+
+        # Verifica si el archivo existe
+        if os.path.exists(img_path):
+            valid_images.append(img_path)
+        else:
+            st.warning(f"⚠️ Imagen no encontrada: {img_path}")
+
+    # Muestra las imágenes o una por defecto
+    if valid_images:
+        st.image(valid_images, width=300, caption=[f"Imagen" for _ in valid_images])
+    else:
+        st.image("https://via.placeholder.com/300x200?text=Sin+imagen", width=300)
+        st.write("No hay imágenes disponibles para esta propiedad.")
     st.title(prop["title"])
     st.subheader(f"📍 {prop['location']}")
     st.markdown(f"**Precio:** ${prop['price']:,} COP/mes")
