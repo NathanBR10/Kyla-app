@@ -35,6 +35,13 @@ def is_match(query, text, threshold=0.4):
     score = difflib.SequenceMatcher(None, q, t).ratio()
     return score >= threshold
 
+def clear_session():
+    """Limpia todos los datos de sesión relacionados con la autenticación"""
+    st.session_state.logged_in = False
+    st.session_state.user_email = ""
+    st.session_state.current_page = "home"
+    st.session_state.selected_property = None
+
 # ======================
 # CARGA DE DATOS
 # ======================
@@ -104,23 +111,23 @@ if "applications" not in st.session_state:
 # FUNCIONES AUXILIARES
 # ======================
 def get_user(email):
+    """Obtiene un usuario por email, con manejo seguro de estados"""
     if not email or email.strip() == "":
         return None
 
-    # Obtener users_df desde session_state
+    # Verificar que users_df exista
     if "users_df" not in st.session_state:
         return None
 
     users_df = st.session_state.users_df
     normalized_email = email.strip().lower()
 
-    # Buscar en el DataFrame
+    # Buscar usuario
     user = users_df[users_df["email"].str.lower() == normalized_email]
 
     if not user.empty:
         return user.iloc[0]
     return None
-
 
 # ======================
 # PÁGINAS DE LA APP
@@ -398,10 +405,10 @@ def show_rental_application():
 def show_profile():
     user = get_user(st.session_state.user_email)
     if user is not None:
+        # Estado inconsistente - limpiar sesión
+        clear_session()
         st.error("❌ Sesión inválida. Por favor, inicia sesión nuevamente.")
-        st.session_state.logged_in = False
-        if st.button("Volver al inicio"):
-            st.rerun()
+        st.rerun()
         return
 
     st.subheader(f"👤 Mi perfil: {user['name']}")
@@ -411,9 +418,8 @@ def show_profile():
     st.markdown(f"**Calificación:** ⭐ {user['rating_avg']} ({user['rating_count']} reseñas)")
 
     if st.button("Cerrar sesión", use_container_width=True):
-        st.session_state.logged_in = False
-        st.session_state.user_email = ""
-        st.session_state.current_page = "home"
+        clear_session()  # Usa la función para limpiar
+        st.success("👋 Sesión cerrada correctamente")
         st.rerun()
 
     # Buzón de solicitudes (solo para arrendadores)
@@ -466,9 +472,24 @@ def main():
                  "properties_df" in st.session_state,
                  "users_df" in st.session_state)
 
+    # Verificar estado de sesión consistente
+    if st.session_state.logged_in and not st.session_state.user_email:
+        # Caso: logueado pero sin email - limpiar sesión
+        clear_session()
+        st.error("❌ Sesión inválida. Por favor, inicia sesión nuevamente.")
+        st.rerun()
+        return
+
+    if not st.session_state.logged_in and st.session_state.user_email:
+        # Caso: no logueado pero con email guardado - limpiar sesión
+        clear_session()
+        st.warning("⚠️ Estado de sesión inconsistente. Por favor, inicia sesión.")
+        st.rerun()
+        return
+
     # Verificar que los DataFrames estén cargados
     if "properties_df" not in st.session_state or "users_df" not in st.session_state:
-        st.error("❌ Error crítico: No se cargaron los datos. Recarga la página.")
+        st.error("❌ Error crítico: No se cargaron los datos.")
         if st.button("Recargar datos"):
             st.cache_data.clear()
             st.session_state.properties_df, st.session_state.users_df = load_data()
@@ -483,9 +504,8 @@ def main():
         user = get_user(st.session_state.user_email)
         if user is None:
             # Usuario no existe - limpiar sesión
-            st.session_state.logged_in = False
-            st.session_state.user_email = ""
-            st.error("❌ Sesión inválida. Por favor, inicia sesión nuevamente.")
+            clear_session()
+            st.error("❌ Sesión inválida. El usuario no existe.")
             st.rerun()
             return
 
