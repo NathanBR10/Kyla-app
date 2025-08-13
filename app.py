@@ -278,6 +278,7 @@ def show_property_detail():
     if st.button("📩 Contactar arrendador"):
         st.success("Mensaje enviado. ¡El arrendador se pondrá en contacto contigo!")
     if st.button("📩 Iniciar proceso de arrendamiento", type="primary"):
+        st.session_state.current_page = "rental_application"
         st.session_state.in_rental_process = True
         st.session_state.property_id = prop["id"]
         st.rerun()
