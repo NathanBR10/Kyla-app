@@ -372,7 +372,7 @@ def show_profile():
         else:
             st.info("Aún no hay solicitudes.")
 
-def def show_rental_application():
+def show_rental_application():
     prop_id = st.session_state.get("property_id")
     if not prop_id:
         st.error("No hay propiedad seleccionada.")
