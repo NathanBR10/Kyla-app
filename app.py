@@ -111,19 +111,32 @@ if "applications" not in st.session_state:
 # FUNCIONES AUXILIARES
 # ======================
 def get_user(email):
-    """Obtiene un usuario por email, con manejo seguro de estados"""
+     """Obtiene un usuario por email con manejo robusto de discrepancias"""
     if not email or email.strip() == "":
         return None
+
+    # Normalizar email: minúsculas y sin espacios
+    normalized_email = email.strip().lower()
 
     # Verificar que users_df exista
     if "users_df" not in st.session_state:
         return None
 
     users_df = st.session_state.users_df
-    normalized_email = email.strip().lower()
 
-    # Buscar usuario
-    user = users_df[users_df["email"].str.lower() == normalized_email]
+    # Buscar usuario con manejo robusto
+    try:
+        # Primero intentar con str.lower() (más rápido)
+        user = users_df[users_df["email"].str.lower() == normalized_email]
+
+        # Si no encuentra, intentar con strip() adicional
+        if user.empty:
+            users_df["email_clean"] = users_df["email"].str.strip().str.lower()
+            user = users_df[users_df["email_clean"] == normalized_email]
+            users_df.drop(columns=["email_clean"], inplace=True)
+    except:
+        # Si hay error con str.lower(), buscar manualmente
+        user = users_df[users_df["email"].apply(lambda x: str(x).strip().lower() == normalized_email)]
 
     if not user.empty:
         return user.iloc[0]
@@ -403,14 +416,67 @@ def show_rental_application():
 
 
 def show_profile():
-    user = get_user(st.session_state.user_email)
-    if user is not None:
-        # Estado inconsistente - limpiar sesión
-        clear_session()
-        st.error("❌ Sesión inválida. Por favor, inicia sesión nuevamente.")
-        st.rerun()
+    # Diagnóstico (quita en producción)
+    with st.expander("🔧 Diagnóstico de sesión"):
+        st.write("### Estado actual")
+        st.write("logged_in:", st.session_state.logged_in)
+        st.write("user_email:", st.session_state.user_email)
+
+        st.write("### Búsqueda de usuario")
+        st.write("Email a buscar:", st.session_state.user_email)
+
+        # Mostrar cómo se está buscando
+        normalized_email = st.session_state.user_email.strip().lower()
+        st.write("Email normalizado:", normalized_email)
+
+        # Mostrar emails en el DataFrame
+        if "users_df" in st.session_state:
+            st.write("Emails en users_df:", st.session_state.users_df["email"].tolist())
+
+        # Intentar encontrar coincidencias parciales
+        if "users_df" in st.session_state:
+            possible_matches = st.session_state.users_df[
+                st.session_state.users_df["email"].str.contains(normalized_email, case=False, na=False)
+            ]
+            st.write("Coincidencias parciales:", possible_matches["email"].tolist())
+
+    # Obtener DataFrames
+    if "users_df" not in st.session_state:
+        st.error("❌ Error de carga de datos. Recarga la página.")
         return
 
+    users_df = st.session_state.users_df
+
+    # Verificar usuario
+    user = get_user(st.session_state.user_email)
+
+    if user is None:
+        # Usuario no encontrado - mostrar opciones
+        st.error("❌ No se encontró tu cuenta. Esto puede deberse a:")
+        st.markdown("""
+           - El usuario fue eliminado
+           - Hubo un problema al cargar los datos
+           - Cambios en el formato del email
+
+           Por favor, inicia sesión nuevamente.
+           """)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔄 Recargar datos", use_container_width=True):
+                st.cache_data.clear()
+                st.session_state.properties_df, st.session_state.users_df = load_data()
+                st.rerun()
+
+        with col2:
+            if st.button("🚪 Cerrar sesión", use_container_width=True):
+                st.session_state.logged_in = False
+                st.session_state.user_email = ""
+                st.session_state.current_page = "home"
+                st.rerun()
+        return
+
+    # Mostrar perfil (solo si el usuario existe)
     st.subheader(f"👤 Mi perfil: {user['name']}")
     st.markdown(f"**Email:** {user['email']}")
     st.markdown(f"**Teléfono:** {user['phone']}")
@@ -427,9 +493,13 @@ def show_profile():
         st.markdown("---")
         st.subheader("📬 Buzón de solicitudes de arrendamiento")
 
+        # Verificar que applications exista
+        if "applications" not in st.session_state:
+            st.session_state.applications = []
+
         owner_apps = []
         for app in st.session_state.applications:
-            prop = properties_df[properties_df["id"] == app["property_id"]]
+            prop = st.session_state.properties_df[st.session_state.properties_df["id"] == app["property_id"]]
             if not prop.empty and prop.iloc[0]["owner_id"] == user["id"]:
                 owner_apps.append(app)
 
@@ -474,9 +544,7 @@ def main():
 
     # Verificar estado de sesión consistente
     if st.session_state.logged_in and not st.session_state.user_email:
-        # Caso: logueado pero sin email - limpiar sesión
-        clear_session()
-        st.error("❌ Sesión inválida. Por favor, inicia sesión nuevamente.")
+        st.session_state.logged_in = False
         st.rerun()
         return
 
@@ -500,13 +568,25 @@ def main():
     if not st.session_state.logged_in:
         show_auth()
     else:
-        # Verificar que el usuario exista
+        # Obtener usuario con manejo robusto
         user = get_user(st.session_state.user_email)
+
+        # Si el usuario no existe, mostrar opciones en lugar de invalidar sesión
         if user is None:
-            # Usuario no existe - limpiar sesión
-            clear_session()
-            st.error("❌ Sesión inválida. El usuario no existe.")
-            st.rerun()
+            st.error("⚠️ No se encontró tu cuenta. Por favor:")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔄 Recargar datos", use_container_width=True):
+                    st.cache_data.clear()
+                    st.session_state.properties_df, st.session_state.users_df = load_data()
+                    st.rerun()
+
+            with col2:
+                if st.button("🚪 Cerrar sesión", use_container_width=True):
+                    st.session_state.logged_in = False
+                    st.session_state.user_email = ""
+                    st.session_state.current_page = "home"
+                    st.rerun()
             return
 
         # Barra lateral
