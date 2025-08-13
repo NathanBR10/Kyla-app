@@ -42,8 +42,17 @@ def is_match(query, text, threshold=0.4):
 @st.cache_data
 def load_data():
     try:
-        properties = pd.read_csv("data/properties.csv")
-        users = pd.read_csv("data/users.csv")
+        properties = pd.read_csv("data/properties.csv", encoding="utf-8")
+        users = pd.read_csv("data/users.csv", encoding="utf-8")
+
+        # ✅ Validar que no estén vacíos
+        if properties.empty:
+            st.error("❌ El archivo 'properties.csv' está vacío.")
+            st.stop()
+
+        if users.empty:
+            st.error("❌ El archivo 'users.csv' está vacío.")
+            st.stop()
 
         # 🔢 Asegurar que el precio sea numérico
         properties["price"] = pd.to_numeric(properties["price"], errors="coerce")
@@ -63,6 +72,16 @@ def load_data():
         users["password"] = users["password"].astype(str)
 
         return properties, users
+
+    except FileNotFoundError as e:
+        st.error(
+            "❌ No se encontraron los archivos de datos. Asegúrate de que `data/properties.csv` y `data/users.csv` están en GitHub.")
+        st.code("Estructura esperada:\nkyla-app/\n├── data/\n│   ├── properties.csv\n│   └── users.csv")
+        st.stop()
+
+    except pd.errors.EmptyDataError:
+        st.error("❌ Uno de los archivos CSV está vacío.")
+        st.stop()
 
     except Exception as e:
         st.error("❌ Error al cargar los datos. Verifica que 'data/properties.csv' y 'data/users.csv' existan y tengan el formato correcto.")
@@ -201,6 +220,18 @@ def show_property_detail():
             st.rerun()
         return
 
+    # Asegurarnos de que prop_id sea entero
+    try:
+        prop_id = int(prop_id)
+    except (ValueError, TypeError):
+        st.error("🆔 ID de propiedad inválido.")
+        if st.button("Volver al inicio"):
+            st.session_state.pop("selected_property", None)
+            st.rerun()
+        return
+
+    # Buscar la propiedad
+    prop_filtered = properties_df[properties_df["id"] == prop_id]
     if prop_filtered.empty:
         st.error("❌ No se encontró la propiedad solicitada.")
         if st.button("Volver al inicio"):
