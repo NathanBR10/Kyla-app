@@ -111,7 +111,7 @@ if "applications" not in st.session_state:
 # FUNCIONES AUXILIARES
 # ======================
 def get_user(email):
-     """Obtiene un usuario por email con manejo robusto de discrepancias"""
+    """Obtiene un usuario por email con manejo robusto de discrepancias"""
     if not email or email.strip() == "":
         return None
 
