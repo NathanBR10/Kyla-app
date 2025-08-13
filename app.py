@@ -105,10 +105,12 @@ if "debug_mode" not in st.session_state:
 # FUNCIONES AUXILIARES
 # ======================
 def get_user(email):
-    if not email:
+    if not email or email.strip() == "":
         return None
     user = users_df[users_df["email"] == email]
-    return user.iloc[0] if not user.empty else None
+    if not user.empty:
+        return user.iloc[0]
+    return None
 
 
 # ======================
@@ -293,7 +295,7 @@ def show_rental_application():
     prop = prop.iloc[0]
 
     user = get_user(st.session_state.user_email)
-    if not user:
+    if user is None:  # ✅ CORREGIDO
         st.error("Usuario no autenticado.")
         return
 
@@ -360,7 +362,7 @@ def show_rental_application():
 
 def show_profile():
     user = get_user(st.session_state.user_email)
-    if not user:
+    if user is not None:
         st.error("❌ Sesión inválida. Por favor, inicia sesión nuevamente.")
         st.session_state.logged_in = False
         if st.button("Volver al inicio"):
@@ -384,10 +386,11 @@ def show_profile():
         st.markdown("---")
         st.subheader("📬 Buzón de solicitudes de arrendamiento")
 
-        owner_apps = [
-            app for app in st.session_state.applications
-            if properties_df[properties_df["id"] == app["property_id"]].iloc[0]["owner_id"] == user["id"]
-        ]
+        owner_apps = []
+        for app in st.session_state.applications:
+            prop = properties_df[properties_df["id"] == app["property_id"]]
+            if not prop.empty and prop.iloc[0]["owner_id"] == user["id"]:
+                owner_apps.append(app)
 
         if not owner_apps:
             st.info("📭 No tienes solicitudes pendientes.")
@@ -434,7 +437,7 @@ def main():
         with st.sidebar:
             st.title("Kyla")
             user = get_user(st.session_state.user_email)
-            if user:
+            if user is not None:
                 st.markdown(f"👤 {user['name']}")
 
             # Navegación
