@@ -107,7 +107,13 @@ if "debug_mode" not in st.session_state:
 def get_user(email):
     if not email or email.strip() == "":
         return None
-    user = users_df[users_df["email"] == email]
+
+    # Normalizar email: minúsculas y sin espacios
+    normalized_email = email.strip().lower()
+
+    # Buscar en el DataFrame (también en minúsculas)
+    user = users_df[users_df["email"].str.lower() == normalized_email]
+
     if not user.empty:
         return user.iloc[0]
     return None
@@ -124,15 +130,16 @@ def show_auth():
         email = st.text_input("Email", key="login_email")
         password = st.text_input("Contraseña", type="password", key="login_password")
         if st.button("Entrar", key="login_btn"):
-            email = email.strip()
+            email = email.strip().lower()  # Normalizar a minúsculas
             password = password.strip()
+
             user = get_user(email)
-            if user is not None and user["password"] == password:
+            if user is not None and str(user["password"]) == password:
                 st.session_state.logged_in = True
-                st.session_state.user_email = email
+                st.session_state.user_email = email  # Guardar en minúsculas
                 st.session_state.current_page = "home"
                 st.success(f"¡Hola de nuevo, {user['name']}!")
-                st.rerun()  # ¡CRÍTICO! Reinicia la app para aplicar cambios
+                st.rerun()
             else:
                 st.error("Email o contraseña incorrectos")
 
@@ -142,21 +149,32 @@ def show_auth():
         phone = st.text_input("Teléfono")
         password = st.text_input("Contraseña", type="password")
         is_owner = st.checkbox("¿Quieres publicar inmuebles?")
+
         if st.button("Registrarse"):
+            email = email.strip().lower()  # Normalizar a minúsculas
+
             if get_user(email):
                 st.error("Este email ya está registrado.")
             else:
                 new_user = pd.DataFrame([{
                     "id": len(users_df) + 1,
                     "name": name,
-                    "email": email,
+                    "email": email,  # Guardar en minúsculas
                     "password": password,
                     "phone": phone,
                     "rating_count": 0,
                     "rating_avg": 0,
                     "is_owner": int(is_owner)
                 }])
+
+                # Guardar en CSV
                 new_user.to_csv("data/users.csv", mode="a", header=False, index=False)
+
+                # Recargar los datos para incluir el nuevo usuario
+                st.cache_data.clear()
+                global properties_df, users_df
+                properties_df, users_df = load_data()
+
                 st.success("✅ ¡Cuenta creada! Ya puedes iniciar sesión.")
                 st.balloons()
 
@@ -433,12 +451,19 @@ def main():
     if not st.session_state.logged_in:
         show_auth()
     else:
+        # Verificar que el usuario exista
+        user = get_user(st.session_state.user_email)
+        if user is None:
+            # Usuario no existe - limpiar sesión
+            st.session_state.logged_in = False
+            st.session_state.user_email = ""
+            st.error("❌ Sesión inválida. Por favor, inicia sesión nuevamente.")
+            st.rerun()
+            return
         # Barra lateral
         with st.sidebar:
             st.title("Kyla")
-            user = get_user(st.session_state.user_email)
-            if user is not None:
-                st.markdown(f"👤 {user['name']}")
+            st.markdown(f"👤 {user['name']}")
 
             # Navegación
             page = st.radio("Ir a", ["Inicio", "Mi perfil"])
