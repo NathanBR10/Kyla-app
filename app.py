@@ -45,6 +45,12 @@ def load_data():
         properties = pd.read_csv("data/properties.csv")
         users = pd.read_csv("data/users.csv")
 
+        # ✅ Verifica que hay datos
+        st.write("📊 Total de propiedades cargadas:", len(properties))
+        if len(properties) > 0:
+            st.write("✅ Primeras filas:")
+            st.dataframe(properties.head())
+
         # 🔢 Asegurar que el precio sea numérico
         properties["price"] = pd.to_numeric(properties["price"], errors="coerce")
         # Eliminar filas con precio inválido
@@ -144,13 +150,18 @@ def show_home():
     with col2:
         min_price = st.number_input("Precio mínimo", 0, 10000000, 0)
     with col3:
-        max_price = st.number_input("Precio máximo", 0, 10000000, 1000000)
+        max_price = st.number_input("Precio máximo", 0, 10000000, 2000000)  # Sube el valor por defecto
 
     # Aplicar filtros
     filtered = properties_df.copy()
 
     # 🔎 Búsqueda inteligente en título y ubicación
     if search:
+        query = search.lower().strip()
+        # Normaliza tildes manualmente
+        replacements = {'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ñ': 'n'}
+        for a, b in replacements.items():
+            query = query.replace(a, b)
         filtered = filtered[
             filtered.apply(
                 lambda row: is_match(search, row["title"]) or is_match(search, row["location"]),
