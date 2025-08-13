@@ -372,72 +372,79 @@ def show_profile():
         else:
             st.info("Aún no hay solicitudes.")
 
-def show_rental_application():
-    try:
-        prop_id = int(prop_id)
-    except (TypeError, ValueError):
-        st.error("ID de propiedad inválido.")
-        return
-
+def def show_rental_application():
     prop_id = st.session_state.get("property_id")
     if not prop_id:
-        st.error("No hay propiedad seleccionada")
+        st.error("No hay propiedad seleccionada.")
+        if st.button("Volver al inicio"):
+            st.session_state.current_page = "home"
+            st.rerun()
         return
 
-    prop = properties_df[properties_df["id"] == prop_id].iloc[0]
+    # Buscar propiedad
+    prop = properties_df[properties_df["id"] == prop_id]
+    if prop.empty:
+        st.error("Propiedad no encontrada.")
+        return
+    prop = prop.iloc[0]
+
     user = get_user(st.session_state.user_email)
     owner = users_df[users_df["id"] == prop["owner_id"]].iloc[0]
 
     st.markdown("<h2 style='color: #4A90E2;'>📝 Solicitud de Arrendamiento</h2>", unsafe_allow_html=True)
-    st.markdown(f"**Propiedad:** {prop['title']} en {prop['location']}")
+    st.markdown(f"**Vivienda:** {prop['title']} en {prop['location']}")
 
     st.markdown("### 📄 Documentos requeridos")
     st.info("""
     - Copia del documento de identidad  
-    - Comprobante de ingresos (últimos 3 recibos)  
-    - Referencias personales o laborales  
+    - Comprobante de ingresos  
+    - Referencias personales  
     - Historial crediticio (opcional)  
     """)
 
-    st.markdown("### 💬 Comentarios adicionales")
-    comments = st.text_area("Escribe un mensaje al arrendador", height=100)
+    st.markdown("### 💬 Comentarios al arrendador")
+    comments = st.text_area("Escribe un mensaje", height=100)
 
     st.markdown("### 📎 Adjuntar documentos")
     uploaded_files = st.file_uploader(
-        "Sube los documentos requeridos",
+        "Sube tus documentos (PDF, JPG, PNG)",
         accept_multiple_files=True,
         type=["pdf", "jpg", "png", "docx"]
     )
 
-    if st.button("📤 Enviar solicitud de arrendamiento", type="primary"):
+    if st.button("📤 Enviar solicitud", type="primary"):
         if not uploaded_files:
             st.warning("Por favor, adjunta al menos un documento.")
         else:
-            # Guardar en Google Sheets (simulado por ahora)
-            try:
-                # Aquí iría save_to_google_sheets()
-                st.session_state.last_application = {
-                    "property": prop["title"],
-                    "applicant": user["name"],
-                    "email": user["email"],
-                    "comments": comments,
-                    "files": [f.name for f in uploaded_files],
-                    "status": "En revisión",
-                    "timestamp": pd.Timestamp.now()
-                }
+            # Guardar en sesión (simulado)
+            new_app = {
+                "property_id": prop["id"],
+                "property_title": prop["title"],
+                "applicant_name": user["name"],
+                "applicant_email": user["email"],
+                "comments": comments,
+                "files": [f.name for f in uploaded_files],
+                "status": "En revisión",
+                "timestamp": pd.Timestamp.now()
+            }
 
-                # Guardar en sesión (temporal)
-                if "applications" not in st.session_state:
-                    st.session_state.applications = []
-                st.session_state.applications.append(st.session_state.last_application)
+            # Guardar en lista global de solicitudes
+            if "rental_applications" not in st.session_state:
+                st.session_state.rental_applications = []
+            st.session_state.rental_applications.append(new_app)
 
-                st.success("✅ ¡Solicitud enviada con éxito!")
-                st.markdown("### 📬 Estado del proceso")
-                st.info("Tu solicitud ha sido enviada al arrendador. Pronto recibirás una respuesta.")
-                st.balloons()
+            st.success("✅ ¡Solicitud enviada con éxito!")
+            st.info("El arrendador la revisará pronto. Puedes ver el estado en tu perfil.")
+            st.balloons()
 
-            except Exception as e:
-                st.error("Hubo un error al enviar la solicitud.")
+            # Opcional: volver al inicio después de 3 segundos
+            if st.button("Volver al inicio"):
+                st.session_state.current_page = "home"
+                st.rerun()
+
+    if st.button("⬅️ Volver"):
+        st.session_state.current_page = "property_detail"
+        st.rerun()
 
 # Mi perfil
 def show_profile():
@@ -453,23 +460,34 @@ def show_profile():
         st.rerun()
 
 
-# Navegación
+# === Navegación principal ===
 if not st.session_state.logged_in:
     show_auth()
 else:
     user = get_user(st.session_state.user_email)
     st.sidebar.title("Kyla")
     st.sidebar.markdown(f"👤 {user['name']}")
-    page = st.sidebar.radio("Ir a", ["Inicio", "Mi perfil", "Publicar inmueble"])
+
+    # Define current_page si no existe
+    if "current_page" not in st.session_state:
+        st.session_state.current_page = "home"
+
+    # Botones de navegación
+    page = st.sidebar.radio("Ir a", ["Inicio", "Mi perfil"])
 
     if page == "Inicio":
+        st.session_state.current_page = "home"
+    elif page == "Mi perfil":
+        st.session_state.current_page = "profile"
+
+    # === Renderizado de páginas ===
+    if st.session_state.current_page == "home":
         show_home()
         if "selected_property" in st.session_state:
             show_property_detail()
-    elif page == "Mi perfil":
+
+    elif st.session_state.current_page == "rental_application":
+        show_rental_application()
+
+    elif st.session_state.current_page == "profile":
         show_profile()
-    elif page == "Publicar inmueble":
-        if user["is_owner"]:
-            show_add_property()
-        else:
-            st.warning("Debes registrarte como arrendador para publicar inmuebles.")
