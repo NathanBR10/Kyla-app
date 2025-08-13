@@ -90,12 +90,17 @@ def load_data():
 
 properties_df, users_df = load_data()
 
-# Estado de sesión
+# === Estado de sesión (DEBE IR AL INICIO, después de cargar datos) ===
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "user_email" not in st.session_state:
     st.session_state.user_email = ""
-
+if "current_page" not in st.session_state:
+    st.session_state.current_page = "home"
+if "selected_property" not in st.session_state:
+    st.session_state.selected_property = None
+if "applications" not in st.session_state:
+    st.session_state.applications = []  # ← Buzón de solicitudes
 
 def get_user(email):
     user = users_df[users_df["email"] == email]
@@ -461,25 +466,15 @@ def show_rental_application():
 if not st.session_state.logged_in:
     show_auth()
 else:
-    # Estado de sesión
-    if "logged_in" not in st.session_state:
-        st.session_state.logged_in = False
-    if "user_email" not in st.session_state:
-        st.session_state.user_email = ""
-    if "current_page" not in st.session_state:
-        st.session_state.current_page = "home"
-    if "applications" not in st.session_state:
-        st.session_state.applications = []  # ← ¡FALTABA ESTO!
-
     user = get_user(st.session_state.user_email)
+    if user is None:
+        st.error("❌ Sesión inválida. Inicia sesión nuevamente.")
+        st.session_state.logged_in = False
+        st.rerun()
+
     st.sidebar.title("Kyla")
     st.sidebar.markdown(f"👤 {user['name']}")
 
-    # Define current_page si no existe
-    if "current_page" not in st.session_state:
-        st.session_state.current_page = "home"
-
-    # Botones de navegación
     page = st.sidebar.radio("Ir a", ["Inicio", "Mi perfil"])
 
     if page == "Inicio":
